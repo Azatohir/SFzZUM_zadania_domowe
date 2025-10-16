@@ -21,6 +21,11 @@ class Ball:
     def change_of_speed(self):
         self.vx += self.gx * 1 / self.dt
         self.vy += self.gy * 1 / self.dt
+
+        # nasze opory pow
+        self.vx *= 0.99
+        self.vy *= 0.99
+
         self.x += self.vx * 1 / self.dt
         self.y += self.vy * 1 / self.dt
 
@@ -71,3 +76,4 @@ while True:
 
     pygame.display.flip()
     clock.tick(60)
+
