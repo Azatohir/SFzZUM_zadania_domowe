@@ -31,8 +31,9 @@ class Ball:
         if self.y < self.y1 and self.x2 > self.x > self.x1:
             if self.y_old > self.y1:
                 self.vy = - self.vy
-                self.y = self.y1
+                self.y = self.y1+1
                 return
+
             if self.vx > 0:
                 self.x = self.x1
             else:
@@ -84,3 +85,4 @@ while True:
 
     pygame.display.flip()
     clock.tick(60)
+
