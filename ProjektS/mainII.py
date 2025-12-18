@@ -1,10 +1,11 @@
-# przeszkoda
 import numpy as np
 import math
 import random
 
 import pygame
 import sys
+
+from openpyxl.styles.colors import BLACK
 
 
 def kernel(r, rmax, leftBorder, rightBorder):
@@ -42,6 +43,22 @@ class Fluid:
         self.swirlOmega = np.zeros(self.maxNumSwirls)
         self.swirlRadius = np.zeros(self.maxNumSwirls)
         self.swirlTime = np.zeros(self.maxNumSwirls)
+
+        self.floorTunedOff = False
+
+    def createNonBurningBlock(self, i1, j1, i2, j2):
+        n = self.numY
+        for i in range(i1, i2 + 1):
+            for j in range(j1, j2 + 1):
+                self.s[i * n + j] = 0
+        self.floorTunedOff = True
+
+    def switchTheFloor(self):
+        for i in range(self.numX):
+            for j in range(4):
+                self.s[i * self.numY + j] = 0.0 if not self.floorTunedOff else 1.0
+
+        self.floorTunedOff = not self.floorTunedOff
 
     def integrate(self, gravity):  # wplyw grawitacji (u nas brak)
         n = self.numY
@@ -191,19 +208,15 @@ class Fluid:
         self.temp = np.array(self.newT)
 
     def updateFire(self):
-        for i in range(self.numX):
-            for j in range(4):
-                self.temp[i * self.numY + j] = 1.0
-
         h = self.h
         swirlTimeSpan = 1.0
         swirlOmega = 20.0
         swirlDamping = 10.0 * self.dt
         swirlProbability = prob * h * h
 
-        fireCooling = 2 * self.dt    # 1.2
-        smokeCooling = 0.9 * self.dt     # 0.3
-        lift = 2.0
+        fireCooling = 1.5 * self.dt  # 1.2
+        smokeCooling = 0.3 * self.dt  # 0.3
+        lift = 2.3
         acceleration = 6.0 * self.dt
         kernelRadius = swirlmaxR
 
@@ -289,7 +302,7 @@ class Fluid:
 
                 # floor burning
 
-                if j < 4:
+                if j < 4 and self.floorTunedOff == False:
                     self.temp[i * n + j] = 1.0
                     self.u[i * n + j] = 0.0
                     self.v[i * n + j] = 0.0
@@ -303,7 +316,8 @@ class Fluid:
                     self.swirlX[nr] = i * h
                     self.swirlY[nr] = j * h
                     self.swirlOmega[nr] = (-1.0 + 2.0 * random.uniform(0, 1)) * swirlOmega
-                    self.swirlTime[nr] = swirlTimeSpan #* random.uniform(0, 1)
+                    self.swirlTime[nr] = swirlTimeSpan  # * random.uniform(0, 1)
+                    self.swirlRadius[nr] = swirlmaxR
                     self.numSwirls += 1
 
             # smooth temperatures
@@ -326,6 +340,21 @@ class Fluid:
         self.advectVel()
         self.advectTemperature()
         self.updateFire()
+
+    def drawWirls(self):
+        for i in range(self.numSwirls):
+            x = int(self.swirlX[i] * cScale)
+            y = HEIGHT - int(self.swirlY[i] * cScale)
+
+            radius = int(self.swirlRadius[i] * cScale)
+
+            pygame.draw.circle(
+                screen,
+                (100, 100, 100),
+                (x, y),
+                radius,
+                2
+            )
 
 
 def getColor(val):
@@ -363,7 +392,7 @@ t_field = 2
 
 pygame.init()
 
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = 1000, 800
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Fluid Fire Simulation")
 
@@ -395,7 +424,10 @@ def draw():
     for i in range(fluid.numX):
         for j in range(fluid.numY):
             t = fluid.temp[i * n + j]
-            r, g, b, _ = getColor(t)
+            if fluid.s[i * n + j] != 0:
+                r, g, b, _ = getColor(t)
+            else:
+                r, g, b = [10, 10, 10]
 
             x = int(i * h * cScale)
             y = HEIGHT - int((j + 1) * h * cScale)
@@ -405,11 +437,17 @@ def draw():
                 (int(r), int(g), int(b)),
                 (x, y, cellSize, cellSize)
             )
+    # fluid.drawWirls()
 
     pygame.display.flip()
 
 
+
+
 running = True
+
+# fluid.createNonBurningBlock(40, 10, 60, 30)
+
 
 while running:
     clock.tick(60)
@@ -418,21 +456,16 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
+    if event.type == pygame.MOUSEBUTTONDOWN:
+        if event.button == 1:  # lewy przycisk myszy
+            fluid.switchTheFloor()
+
     fluid.simulate(gravity, numIters)
+
     draw()
+
     print(fluid.numSwirls)
 
 pygame.quit()
 sys.exit()
 
-# --------------------------------------------------------------------------------------------------------------
-# self.boundary_condition = (lambda t: 0.0, lambda t: 0.0)     # mozna dac funkcje ktora podnosi / opuszcza belke
-
-# zmień warunki brzegowe (tez trzeba zmienic doklade rozwiazanie ale da sie zrobic)
-
-# co zrobic aby pozbyc sie bledu
-# krok czasowy, alfa
-
-# odpal symulacje na dluzej niz 2 sekundy
-
-# w 5
