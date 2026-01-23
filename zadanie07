@@ -1,0 +1,103 @@
+!apt-get install -y \
+    libgl1-mesa-dev \
+    libgl1-mesa-glx \
+    libglew-dev \
+    libosmesa6-dev \
+    software-properties-common
+
+!apt-get install -y patchelf
+
+!pip install gym
+!pip install mujoco
+
+!pip install gymnasium
+import mujoco
+import gymnasium as gym
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def run(episodes=1000):
+  env = gym.make(
+        'InvertedPendulum-v5',
+        reset_noise_scale=0.1,
+        render_mode=None   # <- BEZ okna
+    )
+
+  learning_rate = 0.9 # alpha
+  discount_factor_g = 0.9 # gamma
+  # epsilon greedy policy - aby nie bylo losowe
+  epsilon = 1  # 1 = 100% losowo
+  epsilon_decay_rate = 0.001  # decay
+  epsilon_min = 0.00
+  division = 15  # dzielimy na 15
+
+  # divide observation space into discrete segments
+  x = np.linspace(-2.4, 2.4, division)     # pozycja wózka
+  y = np.linspace(-10, 10, division)       # prędkość
+  w = np.linspace(-3.14, 3.14, division)   # kąt wahadła
+
+  # divide action
+  a = np.linspace(env.action_space.low[0], env.action_space.high[0], division)
+
+  q = np.zeros((division+1, division+1, division+1, division))
+
+  reward_per_episode = []
+
+  for episode in range(episodes):
+    if episode % 100 == 0:
+      print(f'Episode: {episode}')
+
+    state = env.reset()[0]
+
+    s_i0 = np.digitize(state[0], x)
+    s_i1 = np.digitize(state[1], y)
+    s_i2 = np.digitize(state[2], w)
+
+    rewards = 0
+
+    # epsiode
+    for steps in range(1000):   # powinno samo sie zatrzymac przy 1000 ale dla pewnosci
+      if np.random.rand() < epsilon:
+        action_idx = np.random.randint(0, division)
+      else:
+        action_idx = np.argmax(q[s_i0, s_i1, s_i2, :])
+
+      action = np.array([a[action_idx]])
+
+      new_state, reward, terminated, truncated, _ = env.step(action)
+
+      # digitize new state
+      ns_i0 = np.digitize(new_state[0], x)
+      ns_i1 = np.digitize(new_state[1], y)
+      ns_i2 = np.digitize(new_state[2], w)
+
+      # update Q
+      q[s_i0, s_i1, s_i2, action_idx] += learning_rate * (
+          reward + discount_factor_g * np.max(q[ns_i0, ns_i1, ns_i2, :])
+          - q[s_i0, s_i1, s_i2, action_idx]
+        )
+
+      state = new_state
+      s_i0 = ns_i0
+      s_i1 = ns_i1
+      s_i2 = ns_i2
+
+      rewards += reward
+
+      # if terminated or truncated:
+      #   break
+
+    epsilon = max(epsilon_min, epsilon - epsilon_decay_rate)
+    reward_per_episode.append(rewards)
+
+  sum_rewards = np.zeros(episodes)
+  for t in range(episodes):
+    sum_rewards[t] = np.sum(reward_per_episode[max(0, t-100):(t+1)])
+  plt.plot(sum_rewards)
+  plt.show()
+
+  env.close()
+
+
+run()
